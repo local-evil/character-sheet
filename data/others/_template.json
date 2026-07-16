@@ -1,0 +1,7 @@
+{
+  "name": "Full name",
+  "status": "Optional. e.g. Ally — Trusted, Rival — Uncertain, Mentor — Deceased",
+  "notes": "Optional. Main written content for this person. Leave a blank line between paragraphs.",
+  "debts": "Optional. Renders as a highlighted block at the bottom of the page. Leave out or empty to omit.",
+  "continued": false
+}
