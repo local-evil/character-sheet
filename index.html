@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book of Eldrin Vane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=IM+Fell+English:ital@0;1&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+
+<div class="stage">
+  <div class="book" id="book">
+
+    <div class="thumb-tabs" id="thumbTabs"></div>
+
+    <div class="cover" id="coverEl">
+      <canvas class="grain" id="leatherGrain"></canvas>
+      <canvas class="scuff" id="leatherScuff"></canvas>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="clasp"></div>
+      <div class="cover-frame">
+        <div class="cover-eyebrow">The Ties That Bind</div>
+        <h1 class="cover-title">Eldrin Vane</h1>
+        <div class="cover-sub">A Personal Record</div>
+        <div class="cover-sigil">EV</div>
+      </div>
+      <div class="cover-hint">Loading&hellip;</div>
+    </div>
+
+    <div class="spread" id="spreadEl">
+      <div class="page page-left" id="pageLeft">
+        <div class="deckle deckle-left"></div>
+        <canvas class="grain" id="pageGrainL"></canvas>
+        <div class="page-content" id="pageContentL"></div>
+      </div>
+      <div class="page page-right" id="pageRight">
+        <div class="deckle deckle-right"></div>
+        <canvas class="grain" id="pageGrainR"></canvas>
+        <div class="page-content" id="pageContentR"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn">&larr; Prev</button>
+    <button id="toggleBtn">Open book</button>
+    <button id="nextBtn">Next &rarr;</button>
+  </div>
+  <div style="text-align:center; margin-top:8px;"><span class="counter" id="counter"></span></div>
+</div>
+
+<script src="./assets/book.js"></script>
+</body>
+</html>
