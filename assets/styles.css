@@ -15,19 +15,24 @@ body {
 .stage { perspective: 1800px; }
 
 .book {
+  --closed-w: min(380px, 90vw);
+  --open-w: min(860px, 94vw);
   position: relative;
-  width: 380px;
-  max-width: 90vw;
+  width: var(--closed-w);
   height: 560px;
   margin: 0 auto;
+  perspective: 1800px;
   transition: width 0.5s ease;
 }
-.book.wide { width: 860px; max-width: 94vw; }
+.book.wide { width: var(--open-w); transition: width 0.6s ease 0.2s; }
 
 /* ---------- COVER ---------- */
 .cover {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--closed-w);
   border-radius: 4px 12px 12px 4px;
   background:
     radial-gradient(ellipse at 15% 10%, rgba(150,110,160,0.35), transparent 40%),
@@ -43,7 +48,11 @@ body {
   flex-direction: column;
   cursor: pointer;
   overflow: hidden;
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 5;
+  transform-origin: 0% 50%;
+  transform: rotateY(0deg);
+  backface-visibility: hidden;
+  transition: transform 0.6s ease, box-shadow 0.6s ease;
 }
 .cover .grain { position: absolute; inset: 0; opacity: 0.6; mix-blend-mode: overlay; }
 .cover .scuff { position: absolute; inset: 0; opacity: 0.35; mix-blend-mode: soft-light; }
@@ -165,11 +174,19 @@ body {
   box-shadow: 0 30px 70px rgba(0,0,0,0.65);
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.97);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 1;
+  transition: opacity 0.35s ease;
 }
-.book.open .cover { opacity: 0; pointer-events: none; transform: scale(0.97); }
-.book.open .spread { opacity: 1; pointer-events: auto; transform: scale(1); }
+.book.open .cover {
+  transform: rotateY(-160deg);
+  pointer-events: none;
+  transition: transform 0.85s cubic-bezier(.65,.05,.2,1), box-shadow 0.85s ease;
+}
+.book.open .spread {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.5s ease 0.3s;
+}
 
 .page {
   position: relative;

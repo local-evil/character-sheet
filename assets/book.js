@@ -217,13 +217,8 @@ function setOpen(open) {
   prevBtn.style.visibility = open ? 'visible' : 'hidden';
   nextBtn.style.visibility = open ? 'visible' : 'hidden';
   counterEl.style.visibility = open ? 'visible' : 'hidden';
-  if (open) {
-    book.classList.add('wide');
-    setTimeout(() => book.classList.add('open'), 380);
-  } else {
-    book.classList.remove('open');
-    setTimeout(() => book.classList.remove('wide'), 300);
-  }
+  book.classList.toggle('wide', open);
+  book.classList.toggle('open', open);
 }
 
 coverEl.addEventListener('click', () => { if (ready) setOpen(true); });
