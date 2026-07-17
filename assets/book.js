@@ -263,12 +263,15 @@ function renderPageSlot(contentId, page) {
   el.innerHTML = buildPageHTML(page);
   const body = el.querySelector('.page-body');
   if (body) {
-    requestAnimationFrame(() => {
+    // Wait out the open/width transition (see .book.wide / .book.open in
+    // styles.css) so this check runs against the page's settled size —
+    // otherwise it can misfire while the book is still closed or opening.
+    setTimeout(() => {
       if (body.scrollHeight > body.clientHeight + 1) {
         body.classList.add('overflowing');
         console.warn(`"${page.filename}" still overflows after pagination — a single block (e.g. a long debts/further-studies note) may be too tall for one page.`);
       }
-    });
+    }, 900);
   }
 }
 
