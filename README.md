@@ -52,23 +52,38 @@ appear in the book (Travels first, then Research, then Others).
 3. Add the new filename to that section's `manifest.json`, in the position
    where it should appear.
 
-### When an entry is too long for one page
+### Text formatting
 
-The book does **not** auto-flow text onto a second page — if a page's text
-would overflow, it fades out at the bottom and a warning is logged to the
-browser console naming the file. When that happens, split the content
-yourself into a second file:
+Inside any `text`/`notes`/`furtherStudies`/`debts` field you can use:
 
-- For **Others**, create a follow-up file (e.g.
-  `005-mira-voss-part2.json`) with the same `name`, the remaining `notes`/
-  `debts`, and `"continued": true`. This renders as a continuation page
-  (no repeated avatar/status) and appears in the book wherever you place it
-  in the manifest — typically right after the first part.
-- For **Travels** or **Research**, just split into a second dated/titled
-  entry the same way.
+- `**bold**`
+- `*italic*`
+- `++underline++`
+- `![alt text](path/to/image.jpg)` for an inline image — put image files
+  under `assets/images/` and reference them with a relative path, e.g.
+  `![the toll house ruin](assets/images/toll-house.jpg)`. Images are scaled
+  to the page width automatically.
 
-See `data/others/002-mira-voss-part1.json` and `003-mira-voss-part2.json`
-for a working two-page example.
+Anything else you type is treated as plain text (HTML is escaped, so raw
+tags won't work).
+
+### Long entries
+
+The book paginates automatically — if an entry's text is too long for one
+page, it flows onto as many additional pages as it needs, each with a
+lighter "continued" header. You don't need to manually split content
+across files for length reasons anymore.
+
+The `furtherStudies` (Research) and `debts` (Others) callout blocks are
+still moved onto a page as a whole (never split mid-block), so an
+extremely long one of those could still overflow its page — keep those
+fairly short.
+
+The **Others** section's `"continued": true` field still exists and still
+works, but it's now optional — it's only useful if you want to force a
+manual page break at a specific point (e.g. for pacing) rather than letting
+auto-pagination decide. See `data/others/002-mira-voss-part1.json` and
+`003-mira-voss-part2.json` for an example of that manual style.
 
 ## Previewing locally
 

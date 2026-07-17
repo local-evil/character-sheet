@@ -16,6 +16,7 @@ let pages = [];
 let spreadStart = 0;
 let isOpen = false;
 let ready = false;
+let allResultsBySection = [];
 
 const book = document.getElementById('book');
 const coverEl = document.getElementById('coverEl');
@@ -25,6 +26,8 @@ const nextBtn = document.getElementById('nextBtn');
 const counterEl = document.getElementById('counter');
 const thumbTabsEl = document.getElementById('thumbTabs');
 const coverHintEl = document.querySelector('.cover-hint');
+const measureHeaderEl = document.getElementById('measureHeader');
+const measureBodyEl = document.getElementById('measureBody');
 
 /* ---------- helpers ---------- */
 
@@ -34,12 +37,33 @@ function escapeHtml(str) {
   }[c]));
 }
 
-function paragraphs(text) {
-  if (!text) return '';
-  return text
-    .split(/\n{2,}/)
-    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('');
+/* Lightweight inline markup, applied after escaping so raw HTML in the
+   source data can never leak through: **bold**, *italic*, ++underline++,
+   ![alt](src) for an inline image. */
+function inlineFormat(escaped) {
+  return escaped
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img class="inline-img" src="$2" alt="$1">')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\+\+([^+]+)\+\+/g, '<u>$1</u>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+
+function formatParagraph(raw) {
+  return `<p>${inlineFormat(escapeHtml(raw)).replace(/\n/g, '<br>')}</p>`;
+}
+
+function splitParagraphsRaw(text) {
+  if (!text) return [];
+  return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+}
+
+function extractImageSrcs(text) {
+  if (!text) return [];
+  const out = [];
+  const re = /!\[[^\]]*\]\(([^)]+)\)/g;
+  let m;
+  while ((m = re.exec(text))) out.push(m[1]);
+  return out;
 }
 
 /* ---------- data loading ---------- */
@@ -67,56 +91,52 @@ async function loadSection(section) {
   }
 }
 
-/* ---------- page templates ---------- */
+/* ---------- entry -> content blocks ---------- */
 
-function travelsHTML(d) {
-  return `
-    <div class="page-eyebrow">Travels</div>
-    <div class="page-meta">${escapeHtml(d.date)}</div>
-    <div class="page-divider"></div>
-    <div class="page-body">${paragraphs(d.text)}</div>
-  `;
-}
+/* Each entry becomes a header (shown once) plus an ordered list of body
+   blocks. Blocks of kind 'p' are plain paragraphs that the paginator is
+   allowed to split mid-paragraph (at a word boundary) if a single one is
+   too tall for an empty page. Blocks of kind 'html' (the further-studies /
+   debts callouts) are moved as a whole to whichever page has room. */
 
-function researchHTML(d) {
-  return `
-    <div class="page-eyebrow">Research</div>
-    <h2 class="page-title">${escapeHtml(d.title || 'Untitled')}</h2>
-    <div class="page-meta">${escapeHtml(d.date)}</div>
-    <div class="page-divider"></div>
-    <div class="page-body">${paragraphs(d.text)}</div>
-    ${d.furtherStudies ? `<div class="page-bottom">
-      <div class="page-bottom-label">Further studies</div>
-      <div class="page-bottom-text">${escapeHtml(d.furtherStudies)}</div>
-    </div>` : ''}
-  `;
-}
+function buildEntrySpec(entry) {
+  const d = entry.data;
 
-function othersHTML(d) {
-  const initials = (d.name || '?')
-    .split(' ')
-    .filter(Boolean)
-    .map(w => w[0])
-    .join('')
-    .slice(0, 3)
-    .toUpperCase();
-
-  const debtsBlock = d.debts ? `<div class="page-bottom">
-      <div class="page-bottom-label">Debts</div>
-      <div class="page-bottom-text">${escapeHtml(d.debts)}</div>
-    </div>` : '';
-
-  if (d.continued) {
-    return `
-      <div class="page-eyebrow">Others &mdash; continued</div>
-      <h2 class="page-title">${escapeHtml(d.name || '')}</h2>
-      <div class="page-divider"></div>
-      <div class="page-body">${paragraphs(d.notes)}</div>
-      ${debtsBlock}
-    `;
+  if (entry.type === 'travels') {
+    return {
+      header: `<div class="page-eyebrow">Travels</div><div class="page-meta">${escapeHtml(d.date)}</div><div class="page-divider"></div>`,
+      contHeader: `<div class="page-eyebrow">Travels &mdash; continued</div><div class="page-divider"></div>`,
+      blocks: splitParagraphsRaw(d.text).map(text => ({ kind: 'p', text }))
+    };
   }
 
-  return `
+  if (entry.type === 'research') {
+    const blocks = splitParagraphsRaw(d.text).map(text => ({ kind: 'p', text }));
+    if (d.furtherStudies) {
+      blocks.push({
+        kind: 'html',
+        html: `<div class="page-bottom"><div class="page-bottom-label">Further studies</div><div class="page-bottom-text">${inlineFormat(escapeHtml(d.furtherStudies))}</div></div>`
+      });
+    }
+    const titleHtml = `<h2 class="page-title">${escapeHtml(d.title || 'Untitled')}</h2>`;
+    return {
+      header: `<div class="page-eyebrow">Research</div>${titleHtml}<div class="page-meta">${escapeHtml(d.date)}</div><div class="page-divider"></div>`,
+      contHeader: `<div class="page-eyebrow">Research &mdash; continued</div>${titleHtml}<div class="page-divider"></div>`,
+      blocks
+    };
+  }
+
+  // others
+  const initials = (d.name || '?').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+  const blocks = splitParagraphsRaw(d.notes).map(text => ({ kind: 'p', text }));
+  if (d.debts) {
+    blocks.push({
+      kind: 'html',
+      html: `<div class="page-bottom"><div class="page-bottom-label">Debts</div><div class="page-bottom-text">${inlineFormat(escapeHtml(d.debts))}</div></div>`
+    });
+  }
+  const contHeader = `<div class="page-eyebrow">Others &mdash; continued</div><h2 class="page-title">${escapeHtml(d.name || '')}</h2><div class="page-divider"></div>`;
+  const fullHeader = `
     <div class="page-eyebrow">Others</div>
     <div class="rel-head">
       <div class="avatar">${initials}</div>
@@ -125,22 +145,114 @@ function othersHTML(d) {
         ${d.status ? `<span class="page-tag">${escapeHtml(d.status)}</span>` : ''}
       </div>
     </div>
-    <div class="page-divider"></div>
-    <div class="page-body">${paragraphs(d.notes)}</div>
-    ${debtsBlock}
-  `;
+    <div class="page-divider"></div>`;
+  return { header: d.continued ? contHeader : fullHeader, contHeader, blocks };
 }
 
-function buildPageHTML(page) {
-  let inner;
-  if (page.type === 'travels') inner = travelsHTML(page.data);
-  else if (page.type === 'research') inner = researchHTML(page.data);
-  else inner = othersHTML(page.data);
-  const pageNum = pages.indexOf(page) + 1;
-  return inner + `<div class="page-footer">${pageNum}</div>`;
+function blockHtml(block) {
+  return block.kind === 'html' ? block.html : formatParagraph(block.text);
+}
+
+/* Binary-searches how many words of a too-tall paragraph fit on an empty
+   page, using the real measurer so it accounts for the active font/width. */
+function splitOversizedParagraph(text, fits) {
+  const words = text.split(/\s+/);
+  let lo = 1, hi = words.length, best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (fits(formatParagraph(words.slice(0, mid).join(' ')))) { best = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  if (best === 0) best = 1; // always make forward progress, even if one word overflows
+  return { fitText: words.slice(0, best).join(' '), remainderText: words.slice(best).join(' ') };
+}
+
+/* ---------- pagination ---------- */
+
+function paginateEntry(entry) {
+  const spec = buildEntrySpec(entry);
+  const out = [];
+  let remaining = spec.blocks.slice();
+  let header = spec.header;
+
+  while (true) {
+    measureHeaderEl.innerHTML = header;
+    let accHtml = '';
+    let fitCount = 0;
+    let splitRemainderBlock = null;
+
+    for (let idx = 0; idx < remaining.length; idx++) {
+      const block = remaining[idx];
+      const candidateHtml = accHtml + blockHtml(block);
+      measureBodyEl.innerHTML = candidateHtml;
+      const overflow = measureBodyEl.scrollHeight > measureBodyEl.clientHeight + 1;
+
+      if (!overflow) {
+        accHtml = candidateHtml;
+        fitCount = idx + 1;
+        continue;
+      }
+      if (idx > 0) break; // later blocks carry over to the next page as-is
+
+      // the very first block on an empty page is already too tall on its own
+      if (block.kind === 'p') {
+        const { fitText, remainderText } = splitOversizedParagraph(block.text, html => {
+          measureBodyEl.innerHTML = html;
+          return measureBodyEl.scrollHeight <= measureBodyEl.clientHeight + 1;
+        });
+        accHtml = formatParagraph(fitText);
+        fitCount = 1;
+        if (remainderText) splitRemainderBlock = { kind: 'p', text: remainderText };
+      } else {
+        accHtml = candidateHtml; // atomic block (e.g. a huge debts note) — accept the overflow rather than loop forever
+        fitCount = 1;
+      }
+      break;
+    }
+
+    out.push({ headerHtml: header, bodyHtml: accHtml });
+    const carryOver = remaining.slice(fitCount);
+    remaining = splitRemainderBlock ? [splitRemainderBlock, ...carryOver] : carryOver;
+    if (remaining.length === 0) break;
+    header = spec.contHeader;
+  }
+
+  return out.map(p => ({
+    headerHtml: p.headerHtml,
+    bodyHtml: p.bodyHtml,
+    type: entry.type,
+    sectionLabel: entry.sectionLabel,
+    filename: entry.filename
+  }));
+}
+
+async function preloadImages(entries) {
+  const srcs = new Set();
+  entries.forEach(e => {
+    const d = e.data;
+    [d.text, d.notes, d.furtherStudies, d.debts].forEach(t => extractImageSrcs(t).forEach(s => srcs.add(s)));
+  });
+  await Promise.all([...srcs].map(src => new Promise(resolve => {
+    const img = new Image();
+    img.onload = resolve;
+    img.onerror = resolve; // a broken image reference shouldn't block pagination
+    img.src = src;
+  })));
+}
+
+function paginateAllSections(resultsBySection) {
+  pages = [];
+  resultsBySection.forEach(entries => {
+    entries.forEach(entry => { pages.push(...paginateEntry(entry)); });
+  });
 }
 
 /* ---------- rendering ---------- */
+
+function buildPageHTML(page) {
+  const pageNum = pages.indexOf(page) + 1;
+  return `${page.headerHtml}<div class="page-body">${page.bodyHtml}</div><div class="page-footer">${pageNum}</div>`;
+}
 
 function renderPageSlot(contentId, page) {
   const el = document.getElementById(contentId);
@@ -154,10 +266,7 @@ function renderPageSlot(contentId, page) {
     requestAnimationFrame(() => {
       if (body.scrollHeight > body.clientHeight + 1) {
         body.classList.add('overflowing');
-        console.warn(
-          `"${page.filename}" overflows its page. This text does not auto-flow — ` +
-          `split the remainder into a new entry file (for Others, set "continued": true on the follow-up file).`
-        );
+        console.warn(`"${page.filename}" still overflows after pagination — a single block (e.g. a long debts/further-studies note) may be too tall for one page.`);
       }
     });
   }
@@ -187,14 +296,11 @@ function renderSpread() {
   nextBtn.disabled = spreadStart + 2 >= pages.length;
 }
 
-function buildThumbTabs(resultsBySection) {
+function buildThumbTabs() {
   thumbTabsEl.innerHTML = '';
-  let cursor = 0;
-  SECTIONS.forEach((section, i) => {
-    const count = resultsBySection[i].length;
-    const firstIndex = cursor;
-    cursor += count;
-    if (count === 0) return;
+  SECTIONS.forEach(section => {
+    const firstIndex = pages.findIndex(p => p.type === section.key);
+    if (firstIndex === -1) return;
     const tab = document.createElement('div');
     tab.className = 'thumb-tab';
     tab.textContent = section.label;
@@ -282,17 +388,36 @@ function paintAllTextures() {
 
 /* ---------- init ---------- */
 
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
 async function init() {
-  const resultsBySection = await Promise.all(SECTIONS.map(loadSection));
-  pages = resultsBySection.flat();
-  buildThumbTabs(resultsBySection);
+  allResultsBySection = await Promise.all(SECTIONS.map(loadSection));
+  await preloadImages(allResultsBySection.flat());
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch (err) { /* font loading state unavailable; proceed with current metrics */ }
+  }
+  paginateAllSections(allResultsBySection);
+  buildThumbTabs();
   renderSpread();
   paintAllTextures();
   ready = true;
   if (coverHintEl) coverHintEl.textContent = pages.length ? 'Click to open' : 'No entries found';
 }
 
+function repaginate() {
+  if (!ready) return;
+  const currentFilename = pages[spreadStart] ? pages[spreadStart].filename : null;
+  paginateAllSections(allResultsBySection);
+  buildThumbTabs();
+  const idx = currentFilename ? pages.findIndex(p => p.filename === currentFilename) : -1;
+  spreadStart = idx === -1 ? 0 : Math.floor(idx / 2) * 2;
+  renderSpread();
+}
+
 if (coverHintEl) coverHintEl.textContent = 'Loading…';
 setOpen(false);
 init();
-window.addEventListener('resize', paintAllTextures);
+window.addEventListener('resize', debounce(() => { repaginate(); paintAllTextures(); }, 200));
