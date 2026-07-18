@@ -12,6 +12,11 @@ const SECTIONS = [
   { key: 'others',   label: 'Others',   folder: 'data/others' }
 ];
 
+/* Small per-section horizontal nudge (px) so ribbons that land in the same
+   left/center/right slot fan out instead of stacking exactly on top of
+   each other. */
+const RIBBON_NUDGE = { travels: -18, research: 0, others: 18 };
+
 let pages = [];
 let spreadStart = 0;
 let isOpen = false;
@@ -24,7 +29,7 @@ const toggleBtn = document.getElementById('toggleBtn');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const counterEl = document.getElementById('counter');
-const thumbTabsEl = document.getElementById('thumbTabs');
+const ribbonsEl = document.getElementById('ribbons');
 const coverHintEl = document.querySelector('.cover-hint');
 const measureHeaderEl = document.getElementById('measureHeader');
 const measureBodyEl = document.getElementById('measureBody');
@@ -275,10 +280,32 @@ function renderPageSlot(contentId, page) {
   }
 }
 
-function updateActiveTab() {
-  const current = pages[spreadStart] || pages[spreadStart - 1];
-  document.querySelectorAll('.thumb-tab').forEach(tab => {
-    tab.classList.toggle('active', !!current && tab.dataset.section === current.type);
+/* A ribbon marks one specific page -- the page that starts its section --
+   the same way a physical bookmark ribbon marks one spot. "center" only
+   while that exact page is part of the current spread; "left" once you've
+   turned past it, "right" while it's still ahead of you. */
+function ribbonState(section) {
+  const firstIndex = pages.findIndex(p => p.type === section.key);
+  if (firstIndex === -1) return null;
+  if (firstIndex < spreadStart) return 'left';
+  if (firstIndex > spreadStart + 1) return 'right';
+  return 'center';
+}
+
+function ribbonLeftPosition(state, key) {
+  const base = state === 'left' ? 2 : state === 'right' ? 98 : 50;
+  // Only fan neighboring ribbons apart in the left/right edge groups; a
+  // ribbon centered on the gutter should sit dead-center, or it eats into
+  // the page's text padding.
+  const nudge = state === 'center' ? 0 : (RIBBON_NUDGE[key] || 0);
+  return `calc(${base}% + ${nudge}px)`;
+}
+
+function updateRibbonPositions() {
+  document.querySelectorAll('.ribbon').forEach(ribbon => {
+    const section = SECTIONS.find(s => s.key === ribbon.dataset.section);
+    const state = ribbonState(section);
+    if (state) ribbon.style.left = ribbonLeftPosition(state, section.key);
   });
 }
 
@@ -293,28 +320,29 @@ function updateCounter() {
 function renderSpread() {
   renderPageSlot('pageContentL', pages[spreadStart]);
   renderPageSlot('pageContentR', pages[spreadStart + 1]);
-  updateActiveTab();
+  updateRibbonPositions();
   updateCounter();
   prevBtn.disabled = spreadStart <= 0;
   nextBtn.disabled = spreadStart + 2 >= pages.length;
 }
 
-function buildThumbTabs() {
-  thumbTabsEl.innerHTML = '';
+function buildRibbons() {
+  ribbonsEl.innerHTML = '';
   SECTIONS.forEach(section => {
     const firstIndex = pages.findIndex(p => p.type === section.key);
     if (firstIndex === -1) return;
-    const tab = document.createElement('div');
-    tab.className = 'thumb-tab';
-    tab.textContent = section.label;
-    tab.dataset.section = section.key;
-    tab.addEventListener('click', (evt) => {
+    const ribbon = document.createElement('div');
+    ribbon.className = `ribbon ribbon-${section.key}`;
+    ribbon.dataset.section = section.key;
+    ribbon.style.left = ribbonLeftPosition(ribbonState(section), section.key);
+    ribbon.innerHTML = `<span class="ribbon-label">${escapeHtml(section.label)}</span>`;
+    ribbon.addEventListener('click', (evt) => {
       evt.stopPropagation();
       spreadStart = Math.floor(firstIndex / 2) * 2;
       if (!isOpen) setOpen(true);
       renderSpread();
     });
-    thumbTabsEl.appendChild(tab);
+    ribbonsEl.appendChild(ribbon);
   });
 }
 
@@ -403,7 +431,7 @@ async function init() {
     try { await document.fonts.ready; } catch (err) { /* font loading state unavailable; proceed with current metrics */ }
   }
   paginateAllSections(allResultsBySection);
-  buildThumbTabs();
+  buildRibbons();
   renderSpread();
   paintAllTextures();
   ready = true;
@@ -414,7 +442,7 @@ function repaginate() {
   if (!ready) return;
   const currentFilename = pages[spreadStart] ? pages[spreadStart].filename : null;
   paginateAllSections(allResultsBySection);
-  buildThumbTabs();
+  buildRibbons();
   const idx = currentFilename ? pages.findIndex(p => p.filename === currentFilename) : -1;
   spreadStart = idx === -1 ? 0 : Math.floor(idx / 2) * 2;
   renderSpread();

@@ -15,11 +15,12 @@ body {
 .stage { perspective: 1800px; }
 
 .book {
-  --closed-w: min(380px, 90vw);
-  --open-w: min(860px, 94vw);
+  --closed-w: min(480px, 92vw);
+  --open-w: min(1160px, 96vw);
+  --page-h: min(720px, 82vh);
   position: relative;
   width: var(--closed-w);
-  height: 560px;
+  height: var(--page-h);
   margin: 0 auto;
   perspective: 1800px;
   transition: width 0.5s ease;
@@ -34,7 +35,7 @@ body {
   visibility: hidden;
   pointer-events: none;
 }
-#measurePage { width: calc(var(--open-w) / 2); height: 560px; }
+#measurePage { width: calc(var(--open-w) / 2); height: var(--page-h); }
 
 /* ---------- COVER ---------- */
 .cover {
@@ -205,7 +206,7 @@ body {
     radial-gradient(ellipse at 25% 15%, rgba(255,248,225,0.55), rgba(0,0,0,0) 55%),
     radial-gradient(ellipse at 80% 90%, rgba(120,90,40,0.18), rgba(0,0,0,0) 60%),
     linear-gradient(180deg, #ecdcae 0%, #ddc38e 55%, #cfae7c 100%);
-  padding: 34px 32px;
+  padding: 30px 34px;
   overflow: hidden;
 }
 .page .grain { position: absolute; inset: 0; opacity: 0.28; mix-blend-mode: multiply; }
@@ -274,8 +275,8 @@ body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.55;
   color: #3f2410;
 }
 .page-body p { margin: 0 0 12px; }
@@ -371,7 +372,7 @@ body {
 
 /* ---------- CONTROLS ---------- */
 .controls {
-  margin-top: 30px;
+  margin-top: 52px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -398,39 +399,64 @@ body {
   color: rgba(217,185,104,0.5);
 }
 
-/* ---------- THUMB TABS ---------- */
-.thumb-tabs {
+/* ---------- SECTION RIBBONS ---------- */
+/* One ribbon per section: a long strip of cloth laid over the pages (above
+   .spread in stacking order), tucked slightly into the binding at the top
+   and dangling well past the book's bottom edge. Its "left" position (set
+   inline by updateRibbonPositions) runs it down the gutter, on top of the
+   page, for the section currently in view; once you've paged past that
+   section it slides to the left edge, and sections not reached yet sit at
+   the right edge. */
+.ribbons {
   position: absolute;
-  right: -30px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 6;
+  inset: 0;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
-.thumb-tab {
-  width: 30px;
-  padding: 10px 5px;
-  background: linear-gradient(135deg, #c9a24a, #8a6a2f);
-  border: 1px solid #5c451a;
-  border-left: none;
-  border-radius: 0 5px 5px 0;
-  box-shadow: 2px 2px 6px rgba(0,0,0,0.45);
+.book.open .ribbons {
+  opacity: 1;
+  transition: opacity 0.4s ease 0.35s;
+}
+
+.ribbon {
+  position: absolute;
+  top: -14px;
+  bottom: -38px;
+  width: 36px;
+  transform: translateX(-50%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px));
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 0 14px rgba(255,255,255,0.18);
   cursor: pointer;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 13px;
+  transition: left 0.5s cubic-bezier(.65,.05,.2,1);
+}
+.ribbon::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 20px; left: 50%;
+  width: 1px;
+  background: rgba(255,255,255,0.3);
+  transform: translateX(-50%);
+}
+.ribbon-label {
   font-family: 'Cinzel', serif;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 9px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: #3f2b0e;
+  color: rgba(255,255,255,0.92);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   text-align: center;
-  transition: transform 0.15s ease, background 0.15s ease;
+  line-height: 1.15;
+  pointer-events: none;
 }
-.thumb-tab:hover { transform: translateX(3px); }
-.thumb-tab.active {
-  background: linear-gradient(135deg, #eecf87, #b6924a);
-  transform: translateX(5px);
-  box-shadow: 3px 2px 8px rgba(0,0,0,0.5);
-}
+
+.ribbon-travels  { background: linear-gradient(180deg, #cdeaf3 0%, #82bcd4 55%, #5a93ac 100%); }
+.ribbon-research { background: linear-gradient(180deg, #c6acdf 0%, #8a63b3 55%, #6b4694 100%); }
+.ribbon-others   { background: linear-gradient(180deg, #eecf87 0%, #c9a24a 55%, #a6812f 100%); }
+.ribbon-others .ribbon-label { color: #3f2b0e; text-shadow: none; }
