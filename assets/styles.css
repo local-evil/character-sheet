@@ -245,12 +245,13 @@ body {
 }
 
 /* ---------- PAGE-TURN ANIMATION ---------- */
-/* A short-lived clone of the page being turned, laid directly over it and
-   flipped on the gutter hinge (see flipPage() in book.js). It has two
-   faces -- the cloned page content, and a blank "verso" -- each hidden
-   when it's facing away, so the flap visibly lands showing its back once
-   turned instead of just vanishing. The real page underneath is already
-   showing the next/previous content by the time the flip finishes. */
+/* A short-lived flap laid directly over the page being turned and flipped
+   on the gutter hinge (see flipPage() in book.js). Its two faces -- the
+   old page content, and the real page about to be revealed -- are each
+   hidden when facing away, so it visibly lands showing the new page once
+   turned. The real spread underneath isn't updated until this finishes
+   and is removed, so nothing changes except what the flap itself shows
+   while it's mid-turn. */
 .page-flap {
   position: absolute;
   top: 22px;

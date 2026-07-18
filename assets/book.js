@@ -382,14 +382,23 @@ function setOpen(open) {
 
 /* ---------- page-turn animation ---------- */
 
-/* Clones the page currently on the hinge side of the turn into a flap that
-   sits on top of the real spread and flips it over on the gutter like a
-   real page. The flap has two faces (see .flap-face in styles.css) so it
-   visibly lands showing its (blank) back once turned, rather than just
-   vanishing -- the real spread's content underneath is swapped in
-   immediately, hidden by the flap, so it's already showing the new page by
-   the time the flap finishes rotating and is removed. */
-function flipPage(direction, applyUpdate) {
+let flipping = false;
+
+/* Clones the page on the hinge side of the turn into a flap that sits on
+   top of the real spread and flips it over on the gutter like a real page.
+   Its front face is a clone of what's there now; its back face is the
+   *actual* page that's about to be revealed -- same as a real book, where
+   the back of the leaf you're turning is the next page -- rendered fresh
+   rather than blank, so it visibly lands as the new page instead of a
+   blank verso. The real spread underneath isn't touched until the flap
+   has *completely* finished rotating (transitionend), so nothing peeks
+   through mid-turn: what's visible during the animation is only ever the
+   flap itself (old content up front, new content once it's rotated past
+   the halfway point) laid over an unchanged spread. */
+function flipPage(direction, newSpreadStart) {
+  if (flipping) return;
+  flipping = true;
+
   const isNext = direction === 'next';
   const sourceEl = document.getElementById(isNext ? 'pageRight' : 'pageLeft');
 
@@ -406,27 +415,40 @@ function flipPage(direction, applyUpdate) {
     dst.getContext('2d').drawImage(src, 0, 0);
   });
 
+  // rotating -180deg around a hinge at the gutter lands this flap exactly
+  // over the *other* slot, so its back face should hold whatever page
+  // will end up there.
+  const backPage = isNext ? pages[newSpreadStart] : pages[newSpreadStart + 1];
   const back = document.createElement('div');
-  back.className = 'page flap-face flap-face-back';
+  back.className = `page ${isNext ? 'page-left' : 'page-right'} flap-face flap-face-back`;
+  const backContent = document.createElement('div');
+  backContent.className = 'page-content';
+  backContent.innerHTML = backPage
+    ? buildPageHTML(backPage)
+    : '<div class="page-blank">&middot; end of entries &middot;</div>';
+  back.appendChild(backContent);
 
   const flap = document.createElement('div');
   flap.className = `page-flap ${isNext ? 'flap-right' : 'flap-left'}`;
   flap.append(front, back);
   book.appendChild(flap);
 
-  applyUpdate();
-
   requestAnimationFrame(() => flap.classList.add('flap-turning'));
-  flap.addEventListener('transitionend', () => flap.remove(), { once: true });
+  flap.addEventListener('transitionend', () => {
+    spreadStart = newSpreadStart;
+    renderSpread();
+    flap.remove();
+    flipping = false;
+  }, { once: true });
 }
 
 coverEl.addEventListener('click', () => { if (ready) setOpen(true); });
 toggleBtn.addEventListener('click', () => { if (ready) setOpen(!isOpen); });
 prevBtn.addEventListener('click', () => {
-  if (spreadStart - 2 >= 0) flipPage('prev', () => { spreadStart -= 2; renderSpread(); });
+  if (spreadStart - 2 >= 0) flipPage('prev', spreadStart - 2);
 });
 nextBtn.addEventListener('click', () => {
-  if (spreadStart + 2 < pages.length) flipPage('next', () => { spreadStart += 2; renderSpread(); });
+  if (spreadStart + 2 < pages.length) flipPage('next', spreadStart + 2);
 });
 
 /* ---------- texture painting (leather + paper grain) ---------- */
