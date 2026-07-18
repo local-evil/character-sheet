@@ -15,17 +15,25 @@ body {
 .stage { perspective: 1800px; }
 
 .book {
-  --closed-w: min(480px, 92vw);
-  --open-w: min(1160px, 96vw);
+  --book-w: min(1160px, 96vw);
+  --page-w: calc((var(--book-w) - 52px) / 2);
   --page-h: min(720px, 82vh);
+  --leather: linear-gradient(160deg, #45254c 0%, #301a38 40%, #1c0f22 75%, #130a17 100%);
+  --parchment:
+    radial-gradient(ellipse at 25% 15%, rgba(255,248,225,0.55), rgba(0,0,0,0) 55%),
+    radial-gradient(ellipse at 80% 90%, rgba(120,90,40,0.18), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, #ecdcae 0%, #ddc38e 55%, #cfae7c 100%);
   position: relative;
-  width: var(--closed-w);
+  width: var(--page-w);
   height: var(--page-h);
   margin: 0 auto;
   perspective: 1800px;
-  transition: width 0.5s ease;
+  /* No transition here: the swap between --page-w (closed cover, one
+     page) and --book-w (open, two pages + border) is an instant snap,
+     timed via JS (see setOpen) to land right as the cover finishes
+     rotating away -- not an animated grow. */
 }
-.book.wide { width: var(--open-w); transition: width 0.6s ease 0.2s; }
+.book.wide { width: var(--book-w); }
 
 /* ---------- OFFSCREEN PAGINATION MEASURER ---------- */
 .measure-stage {
@@ -35,7 +43,17 @@ body {
   visibility: hidden;
   pointer-events: none;
 }
-#measurePage { width: calc(var(--open-w) / 2); height: var(--page-h); }
+/* display:contents removes this wrapper from the box tree, so the header
+   markup injected into it becomes a direct flex child of .page-content --
+   same as in a real page. Without this, its children are plain block
+   children of a div instead of flex items, so adjacent margins between
+   them (e.g. .page-title's and .page-divider's) collapse to their max
+   instead of summing, understating the header's real height by a few px
+   and letting the paginator pack slightly too much text onto a page. */
+#measureHeader { display: contents; }
+/* Must mirror .spread's padding (the leather border) exactly, or the
+   measurer thinks pages are bigger than they really are. */
+#measurePage { width: calc((var(--book-w) - 52px) / 2); height: calc(var(--page-h) - 44px); }
 
 /* ---------- COVER ---------- */
 .cover {
@@ -43,12 +61,12 @@ body {
   top: 0;
   bottom: 0;
   left: 0;
-  width: var(--closed-w);
+  width: var(--page-w);
   border-radius: 4px 12px 12px 4px;
   background:
     radial-gradient(ellipse at 15% 10%, rgba(150,110,160,0.35), transparent 40%),
     radial-gradient(ellipse at 90% 90%, rgba(150,110,160,0.25), transparent 45%),
-    linear-gradient(160deg, #45254c 0%, #301a38 40%, #1c0f22 75%, #130a17 100%);
+    var(--leather);
   box-shadow:
     0 30px 70px rgba(0,0,0,0.7),
     0 2px 0 rgba(0,0,0,0.5) inset,
@@ -176,17 +194,23 @@ body {
 }
 
 /* ---------- OPEN SPREAD ---------- */
+/* The frame around the pages reuses the cover's leather background so the
+   closed cover and the open spread read as the same physical object; its
+   padding is the "border" the pages sit inset within, and its outer box is
+   exactly .book's box (never resized), so opening never grows anything --
+   the cover just rotates away and this appears in place, already complete. */
 .spread {
   position: absolute;
   inset: 0;
   display: flex;
-  border-radius: 4px;
-  overflow: visible;
+  padding: 22px 26px;
+  border-radius: 4px 12px 12px 4px;
+  background: var(--leather);
   box-shadow: 0 30px 70px rgba(0,0,0,0.65);
   opacity: 0;
   pointer-events: none;
   z-index: 1;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.2s ease;
 }
 .book.open .cover {
   transform: rotateY(-160deg);
@@ -196,23 +220,17 @@ body {
 .book.open .spread {
   opacity: 1;
   pointer-events: auto;
-  transition: opacity 0.5s ease 0.3s;
+  transition: opacity 0.15s ease 0.8s;
 }
 
 .page {
   position: relative;
   flex: 1;
-  background:
-    radial-gradient(ellipse at 25% 15%, rgba(255,248,225,0.55), rgba(0,0,0,0) 55%),
-    radial-gradient(ellipse at 80% 90%, rgba(120,90,40,0.18), rgba(0,0,0,0) 60%),
-    linear-gradient(180deg, #ecdcae 0%, #ddc38e 55%, #cfae7c 100%);
+  background: var(--parchment);
   padding: 30px 34px;
   overflow: hidden;
 }
 .page .grain { position: absolute; inset: 0; opacity: 0.28; mix-blend-mode: multiply; }
-
-.page-left { border-radius: 4px 0 0 4px; }
-.page-right { border-radius: 0 4px 4px 0; }
 .page-left::after {
   content: "";
   position: absolute;
@@ -225,6 +243,39 @@ body {
   left: 0; top: 0; bottom: 0; width: 44px;
   background: linear-gradient(90deg, rgba(50,25,10,0.32), rgba(50,25,10,0));
 }
+
+/* ---------- PAGE-TURN ANIMATION ---------- */
+/* A short-lived clone of the page being turned, laid directly over it and
+   flipped on the gutter hinge (see flipPage() in book.js). It has two
+   faces -- the cloned page content, and a blank "verso" -- each hidden
+   when it's facing away, so the flap visibly lands showing its back once
+   turned instead of just vanishing. The real page underneath is already
+   showing the next/previous content by the time the flip finishes. */
+.page-flap {
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  width: var(--page-w);
+  z-index: 8;
+  pointer-events: none;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(.45,.05,.55,.95);
+}
+.flap-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+  backface-visibility: hidden;
+}
+.flap-face-back { transform: rotateY(180deg); }
+
+.flap-right { right: 26px; transform-origin: left center; }
+.flap-right .flap-face { border-radius: 0 4px 4px 0; }
+.flap-right.flap-turning { transform: rotateY(-180deg); }
+.flap-left { left: 26px; transform-origin: right center; }
+.flap-left .flap-face { border-radius: 4px 0 0 4px; }
+.flap-left.flap-turning { transform: rotateY(180deg); }
 
 .deckle {
   position: absolute;
@@ -399,64 +450,53 @@ body {
   color: rgba(217,185,104,0.5);
 }
 
-/* ---------- SECTION RIBBONS ---------- */
-/* One ribbon per section: a long strip of cloth laid over the pages (above
-   .spread in stacking order), tucked slightly into the binding at the top
-   and dangling well past the book's bottom edge. Its "left" position (set
-   inline by updateRibbonPositions) runs it down the gutter, on top of the
-   page, for the section currently in view; once you've paged past that
-   section it slides to the left edge, and sections not reached yet sit at
-   the right edge. */
-.ribbons {
+/* ---------- SECTION INDEX TABS ---------- */
+/* One small sticky-flag tab per section (color/label driven entirely by
+   SECTIONS in book.js -- adding a section needs no CSS changes here). Each
+   tab keeps a fixed vertical slot (set inline by buildSectionTabs) that
+   never changes, and hangs off the book's right edge (ahead of you) until
+   you've turned past the page it's affixed to, then off the left (already
+   read) -- see updateTabPositions(). It never moves vertically and doesn't
+   care whether its page is the one currently on top or buried under
+   others. It's given no z-index (so .spread's z-index:1 paints over it)
+   and overlaps a little into the book, so it reads as affixed to a page
+   tucked inside rather than glued to the outside of the book itself. */
+.tabs {
   position: absolute;
   inset: 0;
-  z-index: 4;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
-.book.open .ribbons {
+.book.open .tabs {
   opacity: 1;
-  transition: opacity 0.4s ease 0.35s;
+  transition: opacity 0.15s ease 0.8s;
 }
 
-.ribbon {
+.section-tab {
   position: absolute;
-  top: -14px;
-  bottom: -38px;
-  width: 36px;
-  transform: translateX(-50%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px));
-  box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 0 14px rgba(255,255,255,0.18);
+  right: -42px;
+  width: 58px;
+  padding: 8px 6px 8px 20px;
+  border-radius: 0 5px 5px 0;
+  box-shadow: 2px 3px 8px rgba(0,0,0,0.45), inset 0 0 10px rgba(255,255,255,0.15);
   cursor: pointer;
   pointer-events: auto;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 13px;
-  transition: left 0.5s cubic-bezier(.65,.05,.2,1);
-}
-.ribbon::after {
-  content: "";
-  position: absolute;
-  top: 0; bottom: 20px; left: 50%;
-  width: 1px;
-  background: rgba(255,255,255,0.3);
-  transform: translateX(-50%);
-}
-.ribbon-label {
   font-family: 'Cinzel', serif;
-  font-size: 9px;
-  letter-spacing: 0.03em;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.92);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   text-align: center;
-  line-height: 1.15;
-  pointer-events: none;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  transition: transform 0.15s ease;
 }
-
-.ribbon-travels  { background: linear-gradient(180deg, #cdeaf3 0%, #82bcd4 55%, #5a93ac 100%); }
-.ribbon-research { background: linear-gradient(180deg, #c6acdf 0%, #8a63b3 55%, #6b4694 100%); }
-.ribbon-others   { background: linear-gradient(180deg, #eecf87 0%, #c9a24a 55%, #a6812f 100%); }
-.ribbon-others .ribbon-label { color: #3f2b0e; text-shadow: none; }
+.section-tab:hover { transform: translateX(-3px); }
+.section-tab.tab-left {
+  right: auto;
+  left: -42px;
+  padding: 8px 20px 8px 6px;
+  border-radius: 5px 0 0 5px;
+}
+.section-tab.tab-left:hover { transform: translateX(3px); }
+.section-tab-dark { color: #3f2b0e; text-shadow: none; }

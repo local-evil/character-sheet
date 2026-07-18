@@ -6,22 +6,27 @@
    the exact fields expected.
 ------------------------------------------------------------------- */
 
+/* To add a new section: add one entry here (plus its data folder). Its
+   index-tab color, page ordering, and vertical slot along the book's edge
+   are all derived automatically from this array -- nothing else to touch. */
 const SECTIONS = [
-  { key: 'travels',  label: 'Travels',  folder: 'data/travels' },
-  { key: 'research', label: 'Research', folder: 'data/research' },
-  { key: 'others',   label: 'Others',   folder: 'data/others' }
+  { key: 'travels',  label: 'Travels',  folder: 'data/travels',  tabColor: 'linear-gradient(160deg, #cdeaf3 0%, #82bcd4 55%, #5a93ac 100%)' },
+  { key: 'research', label: 'Research', folder: 'data/research', tabColor: 'linear-gradient(160deg, #c6acdf 0%, #8a63b3 55%, #6b4694 100%)' },
+  { key: 'others',   label: 'Others',   folder: 'data/others',   tabColor: 'linear-gradient(160deg, #eecf87 0%, #c9a24a 55%, #a6812f 100%)', tabDark: true }
 ];
 
-/* Small per-section horizontal nudge (px) so ribbons that land in the same
-   left/center/right slot fan out instead of stacking exactly on top of
-   each other. */
-const RIBBON_NUDGE = { travels: -18, research: 0, others: 18 };
+// Fixed vertical slots for the section index tabs, in array order -- each
+// section keeps the same slot always, whether its tab is on the left or
+// right edge.
+const TAB_SLOT_TOP = 64;
+const TAB_SLOT_GAP = 48;
 
 let pages = [];
 let spreadStart = 0;
 let isOpen = false;
 let ready = false;
 let allResultsBySection = [];
+let widthTimer = null;
 
 const book = document.getElementById('book');
 const coverEl = document.getElementById('coverEl');
@@ -29,7 +34,7 @@ const toggleBtn = document.getElementById('toggleBtn');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const counterEl = document.getElementById('counter');
-const ribbonsEl = document.getElementById('ribbons');
+const sectionTabsEl = document.getElementById('sectionTabs');
 const coverHintEl = document.querySelector('.cover-hint');
 const measureHeaderEl = document.getElementById('measureHeader');
 const measureBodyEl = document.getElementById('measureBody');
@@ -268,44 +273,37 @@ function renderPageSlot(contentId, page) {
   el.innerHTML = buildPageHTML(page);
   const body = el.querySelector('.page-body');
   if (body) {
-    // Wait out the open/width transition (see .book.wide / .book.open in
-    // styles.css) so this check runs against the page's settled size —
-    // otherwise it can misfire while the book is still closed or opening.
-    setTimeout(() => {
+    requestAnimationFrame(() => {
+      // The real page is only at its paginated (--book-w) size once the
+      // book is actually open; checking while closed/narrow compares
+      // against the wrong width and false-positives.
+      if (!book.classList.contains('wide')) return;
       if (body.scrollHeight > body.clientHeight + 1) {
         body.classList.add('overflowing');
         console.warn(`"${page.filename}" still overflows after pagination — a single block (e.g. a long debts/further-studies note) may be too tall for one page.`);
       }
-    }, 900);
+    });
   }
 }
 
-/* A ribbon marks one specific page -- the page that starts its section --
-   the same way a physical bookmark ribbon marks one spot. "center" only
-   while that exact page is part of the current spread; "left" once you've
-   turned past it, "right" while it's still ahead of you. */
-function ribbonState(section) {
+/* A section's index tab is affixed to the page that starts it. It hangs
+   off the book's right edge (ahead of you, waiting to be reached -- the
+   default state right after opening the book) until you've turned past
+   that page, then sits on the left (already read). Nothing else about it
+   changes: no vertical movement, no distinction between "on the current
+   spread" and "buried under other pages" the way the earlier ribbon
+   design had. */
+function tabIsPastSection(section) {
   const firstIndex = pages.findIndex(p => p.type === section.key);
   if (firstIndex === -1) return null;
-  if (firstIndex < spreadStart) return 'left';
-  if (firstIndex > spreadStart + 1) return 'right';
-  return 'center';
+  return spreadStart > firstIndex;
 }
 
-function ribbonLeftPosition(state, key) {
-  const base = state === 'left' ? 2 : state === 'right' ? 98 : 50;
-  // Only fan neighboring ribbons apart in the left/right edge groups; a
-  // ribbon centered on the gutter should sit dead-center, or it eats into
-  // the page's text padding.
-  const nudge = state === 'center' ? 0 : (RIBBON_NUDGE[key] || 0);
-  return `calc(${base}% + ${nudge}px)`;
-}
-
-function updateRibbonPositions() {
-  document.querySelectorAll('.ribbon').forEach(ribbon => {
-    const section = SECTIONS.find(s => s.key === ribbon.dataset.section);
-    const state = ribbonState(section);
-    if (state) ribbon.style.left = ribbonLeftPosition(state, section.key);
+function updateTabPositions() {
+  document.querySelectorAll('.section-tab').forEach(tab => {
+    const section = SECTIONS.find(s => s.key === tab.dataset.section);
+    const past = tabIsPastSection(section);
+    if (past !== null) tab.classList.toggle('tab-left', past);
   });
 }
 
@@ -320,29 +318,30 @@ function updateCounter() {
 function renderSpread() {
   renderPageSlot('pageContentL', pages[spreadStart]);
   renderPageSlot('pageContentR', pages[spreadStart + 1]);
-  updateRibbonPositions();
+  updateTabPositions();
   updateCounter();
   prevBtn.disabled = spreadStart <= 0;
   nextBtn.disabled = spreadStart + 2 >= pages.length;
 }
 
-function buildRibbons() {
-  ribbonsEl.innerHTML = '';
-  SECTIONS.forEach(section => {
+function buildSectionTabs() {
+  sectionTabsEl.innerHTML = '';
+  SECTIONS.forEach((section, index) => {
     const firstIndex = pages.findIndex(p => p.type === section.key);
     if (firstIndex === -1) return;
-    const ribbon = document.createElement('div');
-    ribbon.className = `ribbon ribbon-${section.key}`;
-    ribbon.dataset.section = section.key;
-    ribbon.style.left = ribbonLeftPosition(ribbonState(section), section.key);
-    ribbon.innerHTML = `<span class="ribbon-label">${escapeHtml(section.label)}</span>`;
-    ribbon.addEventListener('click', (evt) => {
+    const tab = document.createElement('div');
+    tab.className = 'section-tab' + (section.tabDark ? ' section-tab-dark' : '');
+    tab.dataset.section = section.key;
+    tab.style.top = `${TAB_SLOT_TOP + index * TAB_SLOT_GAP}px`;
+    tab.style.background = section.tabColor;
+    tab.textContent = section.label;
+    tab.addEventListener('click', (evt) => {
       evt.stopPropagation();
       spreadStart = Math.floor(firstIndex / 2) * 2;
       if (!isOpen) setOpen(true);
       renderSpread();
     });
-    ribbonsEl.appendChild(ribbon);
+    sectionTabsEl.appendChild(tab);
   });
 }
 
@@ -354,14 +353,65 @@ function setOpen(open) {
   prevBtn.style.visibility = open ? 'visible' : 'hidden';
   nextBtn.style.visibility = open ? 'visible' : 'hidden';
   counterEl.style.visibility = open ? 'visible' : 'hidden';
-  book.classList.toggle('wide', open);
   book.classList.toggle('open', open);
+
+  // The width itself never animates (see .book / .book.wide in styles.css)
+  // -- it snaps instantly, timed to land exactly when the cover has
+  // rotated out of view and the spread is revealing (opening), or once
+  // the spread has finished fading out (closing), so the box is never
+  // caught visibly stretching mid-transition.
+  clearTimeout(widthTimer);
+  widthTimer = setTimeout(() => book.classList.toggle('wide', open), open ? 800 : 200);
+}
+
+/* ---------- page-turn animation ---------- */
+
+/* Clones the page currently on the hinge side of the turn into a flap that
+   sits on top of the real spread and flips it over on the gutter like a
+   real page. The flap has two faces (see .flap-face in styles.css) so it
+   visibly lands showing its (blank) back once turned, rather than just
+   vanishing -- the real spread's content underneath is swapped in
+   immediately, hidden by the flap, so it's already showing the new page by
+   the time the flap finishes rotating and is removed. */
+function flipPage(direction, applyUpdate) {
+  const isNext = direction === 'next';
+  const sourceEl = document.getElementById(isNext ? 'pageRight' : 'pageLeft');
+
+  const front = sourceEl.cloneNode(true);
+  front.removeAttribute('id');
+  front.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  front.classList.add('flap-face', 'flap-face-front');
+  // canvases don't carry their drawn pixels over via cloneNode
+  const sourceCanvases = sourceEl.querySelectorAll('canvas');
+  front.querySelectorAll('canvas').forEach((dst, i) => {
+    const src = sourceCanvases[i];
+    dst.width = src.width;
+    dst.height = src.height;
+    dst.getContext('2d').drawImage(src, 0, 0);
+  });
+
+  const back = document.createElement('div');
+  back.className = 'page flap-face flap-face-back';
+
+  const flap = document.createElement('div');
+  flap.className = `page-flap ${isNext ? 'flap-right' : 'flap-left'}`;
+  flap.append(front, back);
+  book.appendChild(flap);
+
+  applyUpdate();
+
+  requestAnimationFrame(() => flap.classList.add('flap-turning'));
+  flap.addEventListener('transitionend', () => flap.remove(), { once: true });
 }
 
 coverEl.addEventListener('click', () => { if (ready) setOpen(true); });
 toggleBtn.addEventListener('click', () => { if (ready) setOpen(!isOpen); });
-prevBtn.addEventListener('click', () => { if (spreadStart - 2 >= 0) { spreadStart -= 2; renderSpread(); } });
-nextBtn.addEventListener('click', () => { if (spreadStart + 2 < pages.length) { spreadStart += 2; renderSpread(); } });
+prevBtn.addEventListener('click', () => {
+  if (spreadStart - 2 >= 0) flipPage('prev', () => { spreadStart -= 2; renderSpread(); });
+});
+nextBtn.addEventListener('click', () => {
+  if (spreadStart + 2 < pages.length) flipPage('next', () => { spreadStart += 2; renderSpread(); });
+});
 
 /* ---------- texture painting (leather + paper grain) ---------- */
 
@@ -431,7 +481,7 @@ async function init() {
     try { await document.fonts.ready; } catch (err) { /* font loading state unavailable; proceed with current metrics */ }
   }
   paginateAllSections(allResultsBySection);
-  buildRibbons();
+  buildSectionTabs();
   renderSpread();
   paintAllTextures();
   ready = true;
@@ -442,7 +492,7 @@ function repaginate() {
   if (!ready) return;
   const currentFilename = pages[spreadStart] ? pages[spreadStart].filename : null;
   paginateAllSections(allResultsBySection);
-  buildRibbons();
+  buildSectionTabs();
   const idx = currentFilename ? pages.findIndex(p => p.filename === currentFilename) : -1;
   spreadStart = idx === -1 ? 0 : Math.floor(idx / 2) * 2;
   renderSpread();
