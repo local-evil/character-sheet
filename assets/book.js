@@ -163,9 +163,13 @@ function blockHtml(block) {
   return block.kind === 'html' ? block.html : formatParagraph(block.text);
 }
 
-/* Binary-searches how many words of a too-tall paragraph fit on an empty
-   page, using the real measurer so it accounts for the active font/width. */
-function splitOversizedParagraph(text, fits) {
+/* Binary-searches how many words of a paragraph fit in whatever room is
+   left on the page, using the real measurer so it accounts for the active
+   font/width. forceAtLeastOne guarantees forward progress when the page is
+   otherwise completely empty (there's nowhere else for that word to go);
+   when there's already other content on the page, coming up empty just
+   means this paragraph carries over to the next page whole. */
+function splitOversizedParagraph(text, fits, forceAtLeastOne) {
   const words = text.split(/\s+/);
   let lo = 1, hi = words.length, best = 0;
   while (lo <= hi) {
@@ -173,7 +177,8 @@ function splitOversizedParagraph(text, fits) {
     if (fits(formatParagraph(words.slice(0, mid).join(' ')))) { best = mid; lo = mid + 1; }
     else hi = mid - 1;
   }
-  if (best === 0) best = 1; // always make forward progress, even if one word overflows
+  if (best === 0 && forceAtLeastOne) best = 1;
+  if (best === 0) return { fitText: '', remainderText: text };
   return { fitText: words.slice(0, best).join(' '), remainderText: words.slice(best).join(' ') };
 }
 
@@ -202,19 +207,30 @@ function paginateEntry(entry) {
         fitCount = idx + 1;
         continue;
       }
-      if (idx > 0) break; // later blocks carry over to the next page as-is
 
-      // the very first block on an empty page is already too tall on its own
+      // This block doesn't fit as a whole in whatever room is left. If
+      // it's a paragraph, fill the remaining space with as much of it as
+      // fits and carry the rest to the next page -- so a \n\n paragraph
+      // break behaves like one (the next paragraph just continues packing
+      // onto the same page) instead of jumping to a fresh page just
+      // because the *whole* next paragraph didn't fit.
       if (block.kind === 'p') {
+        const prefix = accHtml;
         const { fitText, remainderText } = splitOversizedParagraph(block.text, html => {
-          measureBodyEl.innerHTML = html;
+          measureBodyEl.innerHTML = prefix + html;
           return measureBodyEl.scrollHeight <= measureBodyEl.clientHeight + 1;
-        });
-        accHtml = formatParagraph(fitText);
-        fitCount = 1;
-        if (remainderText) splitRemainderBlock = { kind: 'p', text: remainderText };
-      } else {
-        accHtml = candidateHtml; // atomic block (e.g. a huge debts note) — accept the overflow rather than loop forever
+        }, idx === 0);
+        if (fitText) {
+          accHtml = prefix + formatParagraph(fitText);
+          fitCount = idx + 1;
+          if (remainderText) splitRemainderBlock = { kind: 'p', text: remainderText };
+        }
+        // else: nothing of it fits here -- falls through and carries the
+        // whole paragraph to the next page.
+      } else if (idx === 0) {
+        // an atomic block (e.g. a huge debts note) alone on an empty page
+        // still doesn't fit -- accept the overflow rather than loop forever
+        accHtml = candidateHtml;
         fitCount = 1;
       }
       break;

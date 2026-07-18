@@ -227,7 +227,7 @@ body {
   position: relative;
   flex: 1;
   background: var(--parchment);
-  padding: 30px 34px;
+  padding: 40px 46px;
   overflow: hidden;
 }
 .page .grain { position: absolute; inset: 0; opacity: 0.28; mix-blend-mode: multiply; }
