@@ -360,13 +360,14 @@ function renderPageSlot(contentId, page) {
   }
 }
 
-/* A section's marker is affixed to its title page. Most of the time it
-   just touches the book -- a sliver visible at the edge, right ("ahead of
-   you", the default) if that page hasn't been reached yet, left ("already
-   read") once you've turned past it. While that title page is actually
-   part of the spread on screen, its marker instead comes forward and
-   reaches into whichever slot (left or right) the page landed in, so it
-   visibly rests on the page rather than just touching its edge. */
+/* A section's marker is affixed to its title page, always visible sticking
+   out past the book's edge with a bit of it resting on the page -- right
+   ("ahead of you", the default) if that page hasn't been reached yet, left
+   ("already read") once you've turned past it. While that title page is
+   actually part of the spread on screen, its marker reaches further
+   forward into whichever slot (left or right) the page landed in, so it
+   clearly reads as the one you're on rather than one sitting off to the
+   side. */
 function tabPositionState(section) {
   const firstIndex = pages.findIndex(p => p.type === section.key);
   if (firstIndex === -1) return null;

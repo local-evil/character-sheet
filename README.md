@@ -71,12 +71,14 @@ its first page. To customize the wording, edit (or create)
 If the file is missing, the section's label (from `SECTIONS` in
 `assets/book.js`) is used instead.
 
-Every section also gets a small colored marker along the book's edge,
-affixed to its title page. It hangs off the right edge (ahead of you)
-until you've read past that page, then the left (already read); while
-the title page itself is showing, the marker instead rests visibly in
-that page's margin. Marker color is set per-section via `tabColor` in the
-`SECTIONS` array.
+Every section also gets a small colored sticky-tab marker affixed to its
+title page, sticking out past the book's edge with a bit of it always
+resting on the page -- like a physical index tab. It sits on the right
+edge (ahead of you) until you've read past that page, then the left
+(already read); while the title page itself is showing, its marker reaches
+further onto the page than the others so it clearly reads as the current
+one. Marker color is set per-section via `tabColor` in the `SECTIONS`
+array.
 
 ### Text formatting
 
