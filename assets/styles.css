@@ -194,22 +194,40 @@ body {
 }
 
 /* ---------- OPEN SPREAD ---------- */
-/* The frame around the pages reuses the cover's leather background so the
-   closed cover and the open spread read as the same physical object; its
-   padding is the "border" the pages sit inset within, and its outer box is
-   exactly .book's box (never resized), so opening never grows anything --
-   the cover just rotates away and this appears in place, already complete. */
+/* The leather frame and the pages are two separate layers, not one: a
+   marker needs to be able to show *over* the frame while still being
+   clipped by the pages, so the frame has to sit at a lower z-index than
+   the pages with nothing opaque in between. .spread-border paints the
+   leather (reusing the cover's background so the closed cover and the
+   open spread read as the same object) behind everything; .spread itself
+   is just a transparent, padded flex container positioning the two pages
+   -- its padding is what lets .spread-border's leather show through as
+   the "border" around them. Both share .book's exact box (never resized),
+   so opening never grows anything -- the cover just rotates away and this
+   appears in place, already complete. */
+.spread-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px 12px 12px 4px;
+  background: var(--leather);
+  box-shadow: 0 30px 70px rgba(0,0,0,0.65);
+  opacity: 0;
+  z-index: -1; /* behind markers, so a marker can show over the leather border */
+  transition: opacity 0.2s ease;
+}
+.book.open .spread-border {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.8s;
+}
+
 .spread {
   position: absolute;
   inset: 0;
   display: flex;
   padding: 22px 26px;
-  border-radius: 4px 12px 12px 4px;
-  background: var(--leather);
-  box-shadow: 0 30px 70px rgba(0,0,0,0.65);
   opacity: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 1; /* above markers -- the (opaque) pages inside still clip them */
   transition: opacity 0.2s ease;
 }
 .book.open .cover {
@@ -219,7 +237,6 @@ body {
 }
 .book.open .spread {
   opacity: 1;
-  pointer-events: auto;
   transition: opacity 0.15s ease 0.8s;
 }
 
@@ -229,6 +246,9 @@ body {
   background: var(--parchment);
   padding: 40px 46px;
   overflow: hidden;
+  pointer-events: auto; /* .spread itself no longer captures clicks (see
+    above) so its transparent padding doesn't block a marker underneath;
+    each page re-enables it for its own content area. */
 }
 .page .grain { position: absolute; inset: 0; opacity: 0.28; mix-blend-mode: multiply; }
 .page-left::after {
@@ -473,11 +493,13 @@ body {
    changes, and a fixed horizontal position too -- it never slides in or
    out. .tab-left/.tab-right (ahead of you vs. already read) set that
    position and never move again once a page is turned. The only thing
-   that changes is z-order: by default a marker sits *behind* .spread, so
-   the sliver of it that would otherwise lap onto the page is clipped off
-   right at the page's edge; .tab-front (added only while that marker's
-   title page is part of the current spread) brings it in front instead,
-   so that same sliver is now visible resting on the page -- see
+   that changes is z-order, and markers sit *between* the book's two
+   layers (z-index -1 for .spread-border, 1 for .spread/the pages): by
+   default a marker is behind the pages but in front of the leather
+   border, so it's visible crossing the border and only gets clipped off
+   right at the actual page's edge; .tab-front (added only while that
+   marker's title page is part of the current spread) brings it above the
+   pages too, so it's visible resting on the page itself -- see
    tabPositionState()/updateTabPositions() in book.js. Labels are separate
    always-visible text sitting beyond the book -- see .section-labels. */
 .tabs {
@@ -496,7 +518,7 @@ body {
   position: absolute;
   width: 56px;
   height: 24px;
-  z-index: 0; /* behind .spread by default -- clipped at the page edge */
+  z-index: 0; /* above .spread-border, below .spread -- clipped at the page edge, not the border */
   box-shadow: 1px 3px 8px rgba(0,0,0,0.4);
   cursor: pointer;
   pointer-events: auto;
