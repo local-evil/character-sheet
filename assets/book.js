@@ -121,10 +121,12 @@ function applyBookConfig(config) {
   const titleEl = document.getElementById('coverTitle');
   const subEl = document.getElementById('coverSub');
   const sigilEl = document.getElementById('coverSigil');
+  const title = config.title || 'Eldrin Vane';
   if (eyebrowEl) eyebrowEl.textContent = config.eyebrow || 'The Ties That Bind';
-  if (titleEl) titleEl.textContent = config.title || 'Eldrin Vane';
+  if (titleEl) titleEl.textContent = title;
   if (subEl) subEl.textContent = config.subtitle || 'A Personal Record';
   if (sigilEl) sigilEl.textContent = config.sigil || 'EV';
+  document.title = title;
 }
 
 /* Each section's title page comes from folder/_cover.json (just a

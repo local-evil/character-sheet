@@ -152,7 +152,7 @@ Then open `http://localhost:8000`.
   }
   ```
   Missing fields fall back to those defaults, so the file itself is
-  optional.
+  optional. `title` also sets the browser tab title.
 - Section labels/order/folder names/marker colors live in the `SECTIONS`
   array at the top of `assets/book.js`. Adding a new section is just one
   entry there plus its data folder (with a `manifest.json` and, optionally,
