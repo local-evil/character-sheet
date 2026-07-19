@@ -12,7 +12,7 @@
 const SECTIONS = [
   { key: 'travels',  label: 'Travels',  folder: 'data/travels',  tabColor: 'linear-gradient(160deg, #cdeaf3 0%, #82bcd4 55%, #5a93ac 100%)' },
   { key: 'research', label: 'Research', folder: 'data/research', tabColor: 'linear-gradient(160deg, #c6acdf 0%, #8a63b3 55%, #6b4694 100%)' },
-  { key: 'others',   label: 'Others',   folder: 'data/others',   tabColor: 'linear-gradient(160deg, #eecf87 0%, #c9a24a 55%, #a6812f 100%)', tabDark: true }
+  { key: 'others',   label: 'Others',   folder: 'data/others',   tabColor: 'linear-gradient(160deg, #eecf87 0%, #c9a24a 55%, #a6812f 100%)' }
 ];
 
 // Fixed vertical slots for the section index tabs, in array order -- each
@@ -26,6 +26,7 @@ let spreadStart = 0;
 let isOpen = false;
 let ready = false;
 let allResultsBySection = [];
+let sectionCovers = [];
 let widthTimer = null;
 
 const book = document.getElementById('book');
@@ -35,6 +36,7 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const counterEl = document.getElementById('counter');
 const sectionTabsEl = document.getElementById('sectionTabs');
+const sectionLabelsEl = document.getElementById('sectionLabels');
 const coverHintEl = document.querySelector('.cover-hint');
 const measureHeaderEl = document.getElementById('measureHeader');
 const measureBodyEl = document.getElementById('measureBody');
@@ -98,6 +100,44 @@ async function loadSection(section) {
   } catch (err) {
     console.warn(`Could not load section "${section.key}" — is manifest.json present?`, err);
     return [];
+  }
+}
+
+/* The book's title, subtitle, eyebrow line, and cover monogram all live in
+   data/book.json so they're editable without touching HTML. */
+async function loadBookConfig() {
+  try {
+    const res = await fetch('data/book.json');
+    if (!res.ok) throw new Error('data/book.json not found');
+    return await res.json();
+  } catch (err) {
+    console.warn('Could not load data/book.json — using defaults', err);
+    return {};
+  }
+}
+
+function applyBookConfig(config) {
+  const eyebrowEl = document.getElementById('coverEyebrow');
+  const titleEl = document.getElementById('coverTitle');
+  const subEl = document.getElementById('coverSub');
+  const sigilEl = document.getElementById('coverSigil');
+  if (eyebrowEl) eyebrowEl.textContent = config.eyebrow || 'The Ties That Bind';
+  if (titleEl) titleEl.textContent = config.title || 'Eldrin Vane';
+  if (subEl) subEl.textContent = config.subtitle || 'A Personal Record';
+  if (sigilEl) sigilEl.textContent = config.sigil || 'EV';
+}
+
+/* Each section's title page comes from folder/_cover.json (just a
+   "title" field) so it's editable the same way as any entry; if the file
+   is missing, the section's own label is used instead. */
+async function loadSectionCover(section) {
+  try {
+    const res = await fetch(`${section.folder}/_cover.json`);
+    if (!res.ok) throw new Error('_cover.json not found');
+    const data = await res.json();
+    return { title: data.title || section.label };
+  } catch (err) {
+    return { title: section.label };
   }
 }
 
@@ -266,9 +306,24 @@ async function preloadImages(entries) {
   })));
 }
 
-function paginateAllSections(resultsBySection) {
+/* Every section opens on a title page -- just its name, centered -- which
+   is also its "first page" for the index-marker peek (see
+   tabPositionState()). It's a fixed one-off, not run through the
+   paragraph paginator, since there's nothing to fit. */
+function buildSectionCoverPage(section, coverData) {
+  return {
+    type: section.key,
+    sectionLabel: section.label,
+    filename: `${section.folder}/_cover.json`,
+    isSectionCover: true,
+    coverTitle: coverData.title
+  };
+}
+
+function paginateAllSections(resultsBySection, covers) {
   pages = [];
-  resultsBySection.forEach(entries => {
+  resultsBySection.forEach((entries, i) => {
+    pages.push(buildSectionCoverPage(SECTIONS[i], covers[i]));
     entries.forEach(entry => { pages.push(...paginateEntry(entry)); });
   });
 }
@@ -277,6 +332,9 @@ function paginateAllSections(resultsBySection) {
 
 function buildPageHTML(page) {
   const pageNum = pages.indexOf(page) + 1;
+  if (page.isSectionCover) {
+    return `<div class="section-cover-title">${escapeHtml(page.coverTitle)}</div><div class="page-footer">${pageNum}</div>`;
+  }
   return `${page.headerHtml}<div class="page-body">${page.bodyHtml}</div><div class="page-footer">${pageNum}</div>`;
 }
 
@@ -302,24 +360,39 @@ function renderPageSlot(contentId, page) {
   }
 }
 
-/* A section's index tab is affixed to the page that starts it. It hangs
-   off the book's right edge (ahead of you, waiting to be reached -- the
-   default state right after opening the book) until you've turned past
-   that page, then sits on the left (already read). Nothing else about it
-   changes: no vertical movement, no distinction between "on the current
-   spread" and "buried under other pages" the way the earlier ribbon
-   design had. */
-function tabIsPastSection(section) {
+/* A section's marker is affixed to its title page. Most of the time it
+   just touches the book -- a sliver visible at the edge, right ("ahead of
+   you", the default) if that page hasn't been reached yet, left ("already
+   read") once you've turned past it. While that title page is actually
+   part of the spread on screen, its marker instead comes forward and
+   reaches into whichever slot (left or right) the page landed in, so it
+   visibly rests on the page rather than just touching its edge. */
+function tabPositionState(section) {
   const firstIndex = pages.findIndex(p => p.type === section.key);
   if (firstIndex === -1) return null;
-  return spreadStart > firstIndex;
+  if (firstIndex === spreadStart) return 'current-left';
+  if (firstIndex === spreadStart + 1) return 'current-right';
+  if (firstIndex < spreadStart) return 'left';
+  return 'right';
 }
 
 function updateTabPositions() {
-  document.querySelectorAll('.section-tab').forEach(tab => {
-    const section = SECTIONS.find(s => s.key === tab.dataset.section);
-    const past = tabIsPastSection(section);
-    if (past !== null) tab.classList.toggle('tab-left', past);
+  SECTIONS.forEach(section => {
+    const state = tabPositionState(section);
+    if (!state) return;
+    const tab = sectionTabsEl.querySelector(`.section-tab[data-section="${section.key}"]`);
+    const label = sectionLabelsEl.querySelector(`.section-label[data-section="${section.key}"]`);
+    if (tab) {
+      tab.classList.toggle('tab-left', state === 'left');
+      tab.classList.toggle('tab-right', state === 'right');
+      tab.classList.toggle('tab-current-left', state === 'current-left');
+      tab.classList.toggle('tab-current-right', state === 'current-right');
+    }
+    if (label) {
+      const onLeft = state === 'left' || state === 'current-left';
+      label.classList.toggle('label-left', onLeft);
+      label.classList.toggle('label-right', !onLeft);
+    }
   });
 }
 
@@ -340,24 +413,35 @@ function renderSpread() {
   nextBtn.disabled = spreadStart + 2 >= pages.length;
 }
 
+function jumpToSection(firstIndex) {
+  spreadStart = Math.floor(firstIndex / 2) * 2;
+  if (!isOpen) setOpen(true);
+  renderSpread();
+}
+
 function buildSectionTabs() {
   sectionTabsEl.innerHTML = '';
+  sectionLabelsEl.innerHTML = '';
   SECTIONS.forEach((section, index) => {
     const firstIndex = pages.findIndex(p => p.type === section.key);
     if (firstIndex === -1) return;
+    const top = `${TAB_SLOT_TOP + index * TAB_SLOT_GAP}px`;
+
     const tab = document.createElement('div');
-    tab.className = 'section-tab' + (section.tabDark ? ' section-tab-dark' : '');
+    tab.className = 'section-tab';
     tab.dataset.section = section.key;
-    tab.style.top = `${TAB_SLOT_TOP + index * TAB_SLOT_GAP}px`;
+    tab.style.top = top;
     tab.style.background = section.tabColor;
-    tab.textContent = section.label;
-    tab.addEventListener('click', (evt) => {
-      evt.stopPropagation();
-      spreadStart = Math.floor(firstIndex / 2) * 2;
-      if (!isOpen) setOpen(true);
-      renderSpread();
-    });
+    tab.addEventListener('click', (evt) => { evt.stopPropagation(); jumpToSection(firstIndex); });
     sectionTabsEl.appendChild(tab);
+
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.dataset.section = section.key;
+    label.style.top = top;
+    label.textContent = section.label;
+    label.addEventListener('click', (evt) => { evt.stopPropagation(); jumpToSection(firstIndex); });
+    sectionLabelsEl.appendChild(label);
   });
 }
 
@@ -512,13 +596,39 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+/* A backgrounded/not-yet-visible tab can leave the offscreen measurer with
+   a real 0x0 layout box (the renderer skips work it doesn't need to paint
+   yet), which would make every page look "too tall" and blow the whole
+   book up into one word per page. Give the browser a bit of room to lay
+   it out for real before trusting any measurement -- bounded, so a tab
+   that never becomes visible doesn't hang init() forever. */
+function waitForMeasurableLayout(maxAttempts = 20, intervalMs = 50) {
+  return new Promise(resolve => {
+    let attempts = 0;
+    (function check() {
+      const r = measureBodyEl.getBoundingClientRect();
+      if ((r.width > 0 && r.height > 0) || attempts >= maxAttempts) { resolve(); return; }
+      attempts++;
+      setTimeout(check, intervalMs);
+    })();
+  });
+}
+
 async function init() {
-  allResultsBySection = await Promise.all(SECTIONS.map(loadSection));
+  const [bookConfig, resultsBySection, covers] = await Promise.all([
+    loadBookConfig(),
+    Promise.all(SECTIONS.map(loadSection)),
+    Promise.all(SECTIONS.map(loadSectionCover))
+  ]);
+  applyBookConfig(bookConfig);
+  allResultsBySection = resultsBySection;
+  sectionCovers = covers;
   await preloadImages(allResultsBySection.flat());
   if (document.fonts && document.fonts.ready) {
     try { await document.fonts.ready; } catch (err) { /* font loading state unavailable; proceed with current metrics */ }
   }
-  paginateAllSections(allResultsBySection);
+  await waitForMeasurableLayout();
+  paginateAllSections(allResultsBySection, sectionCovers);
   buildSectionTabs();
   renderSpread();
   paintAllTextures();
@@ -529,7 +639,7 @@ async function init() {
 function repaginate() {
   if (!ready) return;
   const currentFilename = pages[spreadStart] ? pages[spreadStart].filename : null;
-  paginateAllSections(allResultsBySection);
+  paginateAllSections(allResultsBySection, sectionCovers);
   buildSectionTabs();
   const idx = currentFilename ? pages.findIndex(p => p.filename === currentFilename) : -1;
   spreadStart = idx === -1 ? 0 : Math.floor(idx / 2) * 2;
@@ -540,3 +650,8 @@ if (coverHintEl) coverHintEl.textContent = 'Loading…';
 setOpen(false);
 init();
 window.addEventListener('resize', debounce(() => { repaginate(); paintAllTextures(); }, 200));
+// Safety net for the rarer case: a tab that's still hidden well past
+// waitForMeasurableLayout()'s budget (e.g. opened in the background and
+// left there) finishes init() against a real but still-wrong measurement.
+// Once it's actually shown, repaginate for real.
+document.addEventListener('visibilitychange', () => { if (ready && !document.hidden) repaginate(); });

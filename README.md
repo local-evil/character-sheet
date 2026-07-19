@@ -12,23 +12,29 @@ assets/
   styles.css           all visual styling
   book.js               loads data, renders pages, handles open/close + navigation
 data/
+  book.json             cover title/subtitle/eyebrow/monogram (see Customizing)
   travels/
     manifest.json        ordered list of filenames in this section
+    _cover.json           this section's title page (optional -- see below)
     _template.json        copy this to start a new entry (not loaded by the site)
     001-....json           one entry = one page
   research/
     manifest.json
+    _cover.json
     _template.json
     001-....json
   others/
     manifest.json
+    _cover.json
     _template.json
     001-....json
 ```
 
 Nothing is hardcoded in the JavaScript — the book renders whatever entries are
 listed in each `manifest.json`. Order in the manifest is the order pages
-appear in the book (Travels first, then Research, then Others).
+appear in the book (Travels first, then Research, then Others). Each section
+opens on an auto-generated title page (see "Section title pages" below)
+before its listed entries.
 
 ## Adding a new entry
 
@@ -51,6 +57,26 @@ appear in the book (Travels first, then Research, then Others).
 
 3. Add the new filename to that section's `manifest.json`, in the position
    where it should appear.
+
+### Section title pages
+
+Each section automatically gets a title page (just its name, centered) as
+its first page. To customize the wording, edit (or create)
+`_cover.json` in that section's folder:
+
+```json
+{ "title": "Travels" }
+```
+
+If the file is missing, the section's label (from `SECTIONS` in
+`assets/book.js`) is used instead.
+
+Every section also gets a small colored marker along the book's edge,
+affixed to its title page. It hangs off the right edge (ahead of you)
+until you've read past that page, then the left (already read); while
+the title page itself is showing, the marker instead rests visibly in
+that page's margin. Marker color is set per-section via `tabColor` in the
+`SECTIONS` array.
 
 ### Text formatting
 
@@ -112,11 +138,22 @@ Then open `http://localhost:8000`.
 
 ## Customizing
 
-- Book title, subtitle, and the cover monogram are plain text in
-  `index.html` (`.cover-title`, `.cover-sub`, `.cover-sigil`) — edit
-  directly, no data file needed.
-- Section labels/order/folder names live in the `SECTIONS` array at the top
-  of `assets/book.js`.
+- Book title, subtitle, eyebrow line, and cover monogram live in
+  `data/book.json`:
+  ```json
+  {
+    "eyebrow": "The Ties That Bind",
+    "title": "Eldrin Vane",
+    "subtitle": "A Personal Record",
+    "sigil": "EV"
+  }
+  ```
+  Missing fields fall back to those defaults, so the file itself is
+  optional.
+- Section labels/order/folder names/marker colors live in the `SECTIONS`
+  array at the top of `assets/book.js`. Adding a new section is just one
+  entry there plus its data folder (with a `manifest.json` and, optionally,
+  a `_cover.json`) — nothing else needs to change.
 - Colors, fonts, and the leather/parchment textures are all in
   `assets/styles.css`; the grain and scuff textures themselves are painted
   onto `<canvas>` elements at runtime in `assets/book.js`
