@@ -72,13 +72,14 @@ If the file is missing, the section's label (from `SECTIONS` in
 `assets/book.js`) is used instead.
 
 Every section also gets a small colored sticky-tab marker affixed to its
-title page, sticking out past the book's edge with a bit of it always
-resting on the page -- like a physical index tab. It sits on the right
-edge (ahead of you) until you've read past that page, then the left
-(already read); while the title page itself is showing, its marker reaches
-further onto the page than the others so it clearly reads as the current
-one. Marker color is set per-section via `tabColor` in the `SECTIONS`
-array.
+title page -- like a physical index tab. It sits on the right edge (ahead
+of you) until you've read past that page, then the left (already read),
+and that position never moves. What changes is whether it's visible
+resting on the page or clipped off right at the page's edge (hidden
+behind it): only while the title page itself is part of the current
+spread does its marker come to the front and show on the page; every
+other marker stays behind. Marker color is set per-section via `tabColor`
+in the `SECTIONS` array.
 
 ### Text formatting
 

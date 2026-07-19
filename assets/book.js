@@ -360,14 +360,13 @@ function renderPageSlot(contentId, page) {
   }
 }
 
-/* A section's marker is affixed to its title page, always visible sticking
-   out past the book's edge with a bit of it resting on the page -- right
-   ("ahead of you", the default) if that page hasn't been reached yet, left
-   ("already read") once you've turned past it. While that title page is
-   actually part of the spread on screen, its marker reaches further
-   forward into whichever slot (left or right) the page landed in, so it
-   clearly reads as the one you're on rather than one sitting off to the
-   side. */
+/* A section's marker is affixed to its title page at a fixed horizontal
+   spot that never moves: right ("ahead of you", the default) if that page
+   hasn't been reached yet, left ("already read") once you've turned past
+   it. Whether it's actually visible resting on the page, or clipped off
+   right at the page's edge (behind it), is the only thing that changes,
+   and only while that title page is part of the current spread -- see
+   updateTabPositions(). */
 function tabPositionState(section) {
   const firstIndex = pages.findIndex(p => p.type === section.key);
   if (firstIndex === -1) return null;
@@ -381,18 +380,18 @@ function updateTabPositions() {
   SECTIONS.forEach(section => {
     const state = tabPositionState(section);
     if (!state) return;
+    const isLeft = state === 'left' || state === 'current-left';
+    const isCurrent = state === 'current-left' || state === 'current-right';
     const tab = sectionTabsEl.querySelector(`.section-tab[data-section="${section.key}"]`);
     const label = sectionLabelsEl.querySelector(`.section-label[data-section="${section.key}"]`);
     if (tab) {
-      tab.classList.toggle('tab-left', state === 'left');
-      tab.classList.toggle('tab-right', state === 'right');
-      tab.classList.toggle('tab-current-left', state === 'current-left');
-      tab.classList.toggle('tab-current-right', state === 'current-right');
+      tab.classList.toggle('tab-left', isLeft);
+      tab.classList.toggle('tab-right', !isLeft);
+      tab.classList.toggle('tab-front', isCurrent);
     }
     if (label) {
-      const onLeft = state === 'left' || state === 'current-left';
-      label.classList.toggle('label-left', onLeft);
-      label.classList.toggle('label-right', !onLeft);
+      label.classList.toggle('label-left', isLeft);
+      label.classList.toggle('label-right', !isLeft);
     }
   });
 }

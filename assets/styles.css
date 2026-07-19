@@ -470,17 +470,16 @@ body {
 /* One plain-colored marker per section (color driven entirely by SECTIONS
    in book.js -- adding a section needs no CSS changes here), each keeping
    a fixed vertical slot (set inline by buildSectionTabs) that never
-   changes -- like a physical sticky index tab, always visible (above
-   .spread), sticking out past the book's edge with a bit of itself
-   resting on the page. It slides between the right edge (ahead of you,
-   the default) and the left (already read) as you turn pages; see
-   tabPositionState()/updateTabPositions() in book.js. The one marker
-   whose section title page is part of the current spread comes further
-   forward, reaching deeper into that page's margin (and above the
-   others in z-order) so it clearly reads as the one you're on, while the
-   rest sit behind/beside it with a smaller page overlap. Labels are
-   separate always-visible text sitting beyond the book -- see
-   .section-labels. */
+   changes, and a fixed horizontal position too -- it never slides in or
+   out. .tab-left/.tab-right (ahead of you vs. already read) set that
+   position and never move again once a page is turned. The only thing
+   that changes is z-order: by default a marker sits *behind* .spread, so
+   the sliver of it that would otherwise lap onto the page is clipped off
+   right at the page's edge; .tab-front (added only while that marker's
+   title page is part of the current spread) brings it in front instead,
+   so that same sliver is now visible resting on the page -- see
+   tabPositionState()/updateTabPositions() in book.js. Labels are separate
+   always-visible text sitting beyond the book -- see .section-labels. */
 .tabs {
   position: absolute;
   inset: 0;
@@ -497,28 +496,16 @@ body {
   position: absolute;
   width: 56px;
   height: 24px;
-  z-index: 4; /* always above .spread -- a real sticky tab is never hidden */
+  z-index: 0; /* behind .spread by default -- clipped at the page edge */
   box-shadow: 1px 3px 8px rgba(0,0,0,0.4);
   cursor: pointer;
   pointer-events: auto;
-  transition: left 0.4s ease, right 0.4s ease, box-shadow 0.3s ease;
+  transition: box-shadow 0.3s ease;
 }
-/* Resting (not the page currently in view): still sticks out past the
-   book's edge and still visibly laps onto the page a little, just less
-   than the current one -- like the other tabs sticking out further along
-   a real book's edge, sitting behind/beside the one you're on. */
 .section-tab.tab-right { right: -6px; border-radius: 2px 0 0 2px; }
 .section-tab.tab-left { left: -6px; border-radius: 0 2px 2px 0; }
-.section-tab.tab-current-right {
-  right: 14px;
+.section-tab.tab-front {
   z-index: 6;
-  border-radius: 2px;
-  box-shadow: 2px 5px 14px rgba(0,0,0,0.55);
-}
-.section-tab.tab-current-left {
-  left: 14px;
-  z-index: 6;
-  border-radius: 2px;
   box-shadow: 2px 5px 14px rgba(0,0,0,0.55);
 }
 
